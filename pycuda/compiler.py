@@ -105,17 +105,25 @@ def compile_plain(source, options, keep, nvcc, cache_dir, target="cubin"):
     cu_file_name = file_root + ".cu"
     cu_file_path = join(file_dir, cu_file_name)
 
+    try:
+        from pynvrtc.compiler import Program, ProgramException
+        from pycuda.driver import Context
+        archnum = "%d%d" % Context.get_device().compute_capability()
+        options = ['--use_fast_math', '--include-path=/usr/lib/gcc/x86_64-linux-gnu/4.8.4/include/',
+                   '--gpu-architecture=compute_' + archnum]
+        source = Program(source).compile(options)
+        cmdline = ["ptxas", "-o", file_root + "." + target, '-arch', 'sm_' + archnum, cu_file_name]
+    except ImportError, e:
+        if keep:
+            options = options[:]
+            options.append("--keep")
+            print("*** compiler output in %s" % file_dir)
+        cmdline = [nvcc, "--" + target] + options + [cu_file_name]
+
     outf = open(cu_file_path, "w")
     outf.write(str(source))
     outf.close()
 
-    if keep:
-        options = options[:]
-        options.append("--keep")
-
-        print("*** compiler output in %s" % file_dir)
-
-    cmdline = [nvcc, "--" + target] + options + [cu_file_name]
     result, stdout, stderr = call_capture_output(cmdline,
             cwd=file_dir, error_on_nonzero=False)
 
